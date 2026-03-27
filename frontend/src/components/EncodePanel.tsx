@@ -43,9 +43,8 @@ export default function EncodePanel() {
       form.append('message', message);
       if (password) form.append('password', password);
 
-      const { data } = await api.post<EncodeResponse>('/encode', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      // Do not set Content-Type — the browser must add the multipart boundary
+      const { data } = await api.post<EncodeResponse>('/encode', form);
       setResult(data);
       toast.success(isAuthenticated ? 'Encoded and saved' : 'Encoded');
     } catch (err) {

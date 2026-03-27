@@ -32,16 +32,17 @@ export interface PromptsResponse {
 }
 
 export interface EncodeResponse {
-  promptId: string;
+  promptId: string | null;
   outputImage: string; // base64 data URL
   outputFilename: string;
-  message: string;
+  saved?: boolean;
 }
 
 export interface DecodeResponse {
-  promptId: string;
+  promptId: string | null;
   message: string;
   analysis: string | null;
+  saved?: boolean;
 }
 
 export interface ApiError {

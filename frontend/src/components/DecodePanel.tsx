@@ -40,9 +40,7 @@ export default function DecodePanel() {
       form.append('image', file);
       if (password) form.append('password', password);
 
-      const { data } = await api.post<DecodeResponse>('/decode', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const { data } = await api.post<DecodeResponse>('/decode', form);
       setResult(data);
       toast.success('Message extracted');
     } catch (err) {
