@@ -5,17 +5,25 @@ import sharp from 'sharp';
 import { AuthRequest } from '../middleware/auth';
 import { encodeMessage, decodeMessage, getMaxMessageBytes } from '../services/steganography';
 import { analyzeImageContext } from '../services/llmService';
+import {
+  uploadToCloudinary,
+  isCloudinaryConfigured,
+} from '../services/cloudinaryService';
 import { prisma } from '../config/database';
 
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
+// Temp dir for in-progress encoding before upload
+const TEMP_DIR = path.join(__dirname, '../../uploads/tmp');
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-function ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+function cleanupFile(filePath: string) {
+  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* best-effort */ }
 }
 
 export async function encode(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  const inputPath = req.file?.path ?? null;
+
   try {
-    if (!req.file) {
+    if (!inputPath) {
       res.status(400).json({ error: 'No image file provided' });
       return;
     }
@@ -26,12 +34,7 @@ export async function encode(req: AuthRequest, res: Response, next: NextFunction
       return;
     }
 
-    const inputPath = req.file.path;
-    const outputFilename = `encoded_${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
-
-    ensureDir(path.join(UPLOADS_DIR, 'encoded'));
-    const outputPath = path.join(UPLOADS_DIR, 'encoded', outputFilename);
-
+    // Capacity check
     const meta = await sharp(inputPath).metadata();
     const maxBytes = getMaxMessageBytes(meta.width!, meta.height!);
     if (message.length > maxBytes) {
@@ -41,21 +44,40 @@ export async function encode(req: AuthRequest, res: Response, next: NextFunction
       return;
     }
 
-    await encodeMessage(inputPath, message, outputPath, password || undefined);
+    // LSB encode to a temp file
+    const tempFilename = `enc_${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
+    const tempOutputPath = path.join(TEMP_DIR, tempFilename);
+    await encodeMessage(inputPath, message, tempOutputPath, password || undefined);
 
-    const outputBuffer = fs.readFileSync(outputPath);
-    const base64 = outputBuffer.toString('base64');
+    const outputBuffer = fs.readFileSync(tempOutputPath);
+    cleanupFile(tempOutputPath);
+
+    // If Cloudinary is configured, upload; otherwise fall back to base64
+    let outputImage: string;
+    let publicId: string | null = null;
+
+    if (isCloudinaryConfigured()) {
+      const cloudResult = await uploadToCloudinary(
+        outputBuffer,
+        `encoded_${Date.now()}`,
+        'stego/encoded'
+      );
+      outputImage = cloudResult.url;
+      publicId = cloudResult.publicId;
+    } else {
+      // Fallback: base64 data URL (no Cloudinary credentials set)
+      outputImage = `data:image/png;base64,${outputBuffer.toString('base64')}`;
+    }
 
     let promptId: string | null = null;
-
     if (req.user) {
       const prompt = await prisma.prompt.create({
         data: {
           userId: req.user.userId,
           type: 'encode',
-          inputImage: path.relative(UPLOADS_DIR, inputPath),
           message,
-          outputImage: path.join('encoded', outputFilename),
+          outputImage,
+          publicId,
           hasPassword: !!password,
         },
       });
@@ -64,24 +86,28 @@ export async function encode(req: AuthRequest, res: Response, next: NextFunction
 
     res.json({
       promptId,
-      outputImage: `data:image/png;base64,${base64}`,
-      outputFilename,
+      outputImage,
+      outputFilename: `stego_encoded_${Date.now()}.png`,
       saved: !!req.user,
     });
   } catch (err) {
     next(err);
+  } finally {
+    // Always clean up the uploaded input file
+    if (inputPath) cleanupFile(inputPath);
   }
 }
 
 export async function decode(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  const imagePath = req.file?.path ?? null;
+
   try {
-    if (!req.file) {
+    if (!imagePath) {
       res.status(400).json({ error: 'No image file provided' });
       return;
     }
 
     const { password, analyze } = req.body;
-    const imagePath = req.file.path;
 
     let extractedMessage: string;
     try {
@@ -104,13 +130,11 @@ export async function decode(req: AuthRequest, res: Response, next: NextFunction
     }
 
     let promptId: string | null = null;
-
     if (req.user) {
       const prompt = await prisma.prompt.create({
         data: {
           userId: req.user.userId,
           type: 'decode',
-          inputImage: path.relative(UPLOADS_DIR, imagePath),
           message: extractedMessage,
           hasPassword: !!password,
         },
@@ -127,13 +151,15 @@ export async function decode(req: AuthRequest, res: Response, next: NextFunction
         const mediaType = ext === '.png' ? 'image/png' : 'image/jpeg';
         analysis = await analyzeImageContext(b64, mediaType, true);
       } catch {
-        // LLM analysis is optional
+        // LLM analysis is optional — never fail the request for this
       }
     }
 
     res.json({ promptId, message: extractedMessage, analysis, saved: !!req.user });
   } catch (err) {
     next(err);
+  } finally {
+    if (imagePath) cleanupFile(imagePath);
   }
 }
 
@@ -142,20 +168,23 @@ export async function analyzeImage(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  const imagePath = req.file?.path ?? null;
   try {
-    if (!req.file) {
+    if (!imagePath) {
       res.status(400).json({ error: 'No image file provided' });
       return;
     }
 
-    const imageBuffer = fs.readFileSync(req.file.path);
+    const imageBuffer = fs.readFileSync(imagePath);
     const base64 = imageBuffer.toString('base64');
-    const ext = path.extname(req.file.path).toLowerCase();
+    const ext = path.extname(imagePath).toLowerCase();
     const mediaType = ext === '.png' ? 'image/png' : 'image/jpeg';
 
     const analysis = await analyzeImageContext(base64, mediaType, false);
     res.json({ analysis });
   } catch (err) {
     next(err);
+  } finally {
+    if (imagePath) cleanupFile(imagePath);
   }
 }

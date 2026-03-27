@@ -54,12 +54,32 @@ export default function EncodePanel() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!result) return;
-    const a = document.createElement('a');
-    a.href = result.outputImage;
-    a.download = result.outputFilename;
-    a.click();
+    const filename = result.outputFilename || 'stego_encoded.png';
+
+    if (result.outputImage.startsWith('data:')) {
+      // Base64 fallback (Cloudinary not configured)
+      const a = document.createElement('a');
+      a.href = result.outputImage;
+      a.download = filename;
+      a.click();
+    } else {
+      // Cloudinary URL — fetch as blob to force download dialog
+      try {
+        const res = await fetch(result.outputImage);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch {
+        // Fallback: open in new tab
+        window.open(result.outputImage, '_blank');
+      }
+    }
   };
 
   const maxChars = file ? Math.floor((file.size / 3) * 0.85) : null;

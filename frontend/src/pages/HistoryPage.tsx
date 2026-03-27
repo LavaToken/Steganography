@@ -128,11 +128,22 @@ export default function HistoryPage() {
                   </div>
                 </div>
 
-                {expanded === prompt.id && prompt.message && (
-                  <div className="px-4 pb-4 pt-1 border-t border-[var(--border)] bg-[var(--bg)]">
-                    <pre className="text-xs font-mono text-[var(--text)] whitespace-pre-wrap break-words leading-relaxed">
-                      {prompt.message}
-                    </pre>
+                {expanded === prompt.id && (
+                  <div className="px-4 pb-4 pt-3 border-t border-[var(--border)] bg-[var(--bg)] space-y-3">
+                    {prompt.outputImage && (
+                      <div className="rounded-[var(--radius)] overflow-hidden border border-[var(--border)]">
+                        <img
+                          src={prompt.outputImage}
+                          alt="Encoded output"
+                          className="w-full max-h-40 object-contain bg-[var(--surface-muted)]"
+                        />
+                      </div>
+                    )}
+                    {prompt.message && (
+                      <pre className="text-xs font-mono text-[var(--text)] whitespace-pre-wrap break-words leading-relaxed">
+                        {prompt.message}
+                      </pre>
+                    )}
                   </div>
                 )}
               </div>

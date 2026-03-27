@@ -14,9 +14,8 @@ export interface AuthResponse {
 export interface Prompt {
   id: string;
   type: 'encode' | 'decode';
-  inputImage: string;
   message: string | null;
-  outputImage: string | null;
+  outputImage: string | null; // Cloudinary URL or null
   hasPassword: boolean;
   createdAt: string;
 }

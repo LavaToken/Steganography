@@ -1,10 +1,7 @@
 import { Response, NextFunction } from 'express';
-import path from 'path';
-import fs from 'fs';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../config/database';
-
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
+import { deleteFromCloudinary } from '../services/cloudinaryService';
 
 export async function getPrompts(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -21,7 +18,6 @@ export async function getPrompts(req: AuthRequest, res: Response, next: NextFunc
         select: {
           id: true,
           type: true,
-          inputImage: true,
           message: true,
           outputImage: true,
           hasPassword: true,
@@ -52,49 +48,13 @@ export async function deletePrompt(req: AuthRequest, res: Response, next: NextFu
       return;
     }
 
-    // Clean up files
-    const filesToDelete = [prompt.inputImage, prompt.outputImage].filter(Boolean);
-    for (const filePath of filesToDelete) {
-      const fullPath = path.join(UPLOADS_DIR, filePath!);
-      if (fs.existsSync(fullPath)) {
-        fs.unlinkSync(fullPath);
-      }
+    // Clean up Cloudinary asset if present
+    if (prompt.publicId) {
+      try { await deleteFromCloudinary(prompt.publicId); } catch { /* best-effort */ }
     }
 
-    await prisma.prompt.delete({ where: { id: id as string } });
+    await prisma.prompt.delete({ where: { id } });
     res.json({ message: 'Deleted successfully' });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getPromptImage(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const id = req.params['id'] as string;
-    const type = req.query['type'] as string | undefined;
-
-    const prompt = await prisma.prompt.findFirst({
-      where: { id, userId: req.user!.userId },
-    });
-
-    if (!prompt) {
-      res.status(404).json({ error: 'Prompt not found' });
-      return;
-    }
-
-    const imagePath = type === 'output' ? prompt.outputImage : prompt.inputImage;
-    if (!imagePath) {
-      res.status(404).json({ error: 'Image not found' });
-      return;
-    }
-
-    const fullPath = path.join(UPLOADS_DIR, imagePath);
-    if (!fs.existsSync(fullPath)) {
-      res.status(404).json({ error: 'Image file not found' });
-      return;
-    }
-
-    res.sendFile(fullPath);
   } catch (err) {
     next(err);
   }
