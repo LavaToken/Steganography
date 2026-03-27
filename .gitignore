@@ -1,3 +1,9 @@
+# Project-specific
+backend/.env
+backend/uploads/
+backend/dist/
+frontend/dist/
+
 # Logs
 logs
 *.log
