@@ -133,7 +133,7 @@ Use **two Vercel projects** with **Root Directory** `backend` and `frontend` res
    - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` — **strongly recommended** (Vercel has no persistent local disk for uploads).
    - `ANTHROPIC_API_KEY` — optional.
 3. Vercel sets `VERCEL=1`; the app writes uploads only under **`/tmp`**, and request body limit is **4 MB** on the API route.
-4. `vercel.json` sets **10s** `maxDuration` (Hobby). For large images, use **Vercel Pro** and increase `functions.api/index.ts.maxDuration` (e.g. 60).
+4. `vercel.json` sets **`maxDuration` to 60s** (needs **Vercel Pro** — Hobby is capped at **10s**). Decode was optimized to avoid huge in-memory bit arrays so many images finish within 10s; very large photos may still need Pro or smaller files.
 5. Smoke test: `https://<backend>.vercel.app/api/health`.
 
 Entry point: `api/index.ts` wraps Express with `serverless-http`; all routes stay under `/api/...`.

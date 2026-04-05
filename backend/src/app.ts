@@ -10,6 +10,10 @@ import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 
+// Vercel rewrites send arbitrary paths (e.g. /favicon.ico) to this function — answer instantly
+app.get('/favicon.ico', (_req, res) => res.status(204).end());
+app.get('/robots.txt', (_req, res) => res.type('text/plain').send('User-agent: *\nDisallow: /\n'));
+
 function parseCorsOrigins(): string | string[] | boolean {
   const raw = env.CORS_ORIGIN?.trim();
   if (!raw) return true;

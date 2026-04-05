@@ -28,18 +28,6 @@ function messageToBits(message: string): number[] {
   return bits;
 }
 
-function bitsToMessage(bits: number[]): string {
-  const bytes: number[] = [];
-  for (let i = 0; i + 7 < bits.length; i += 8) {
-    let byte = 0;
-    for (let j = 0; j < 8; j++) {
-      byte = (byte << 1) | bits[i + j];
-    }
-    bytes.push(byte);
-  }
-  return Buffer.from(bytes).toString('utf8');
-}
-
 function encrypt(message: string, password: string): string {
   const key = crypto.scryptSync(password, 'stego-salt', 32);
   const iv = crypto.randomBytes(16);
@@ -112,34 +100,32 @@ export async function decodeMessage(
     .toBuffer({ resolveWithObject: true });
 
   const pixels = Buffer.from(data);
-  const totalBits = info.width * info.height * info.channels;
-  const bits: number[] = [];
+  const totalChannels = info.width * info.height * info.channels;
 
-  for (let i = 0; i < totalBits; i++) {
-    bits.push(pixels[i] & 1);
-  }
-
-  // Read bytes until we find the 3-null-byte delimiter
+  // Single pass: never materialize a bit array (was O(pixels) memory + 2 passes — timed out on Vercel)
+  let bitAcc = 0;
+  let bitCount = 0;
   const bytes: number[] = [];
-  for (let i = 0; i + 7 < bits.length; i += 8) {
-    let byte = 0;
-    for (let j = 0; j < 8; j++) {
-      byte = (byte << 1) | bits[i + j];
-    }
-    bytes.push(byte);
 
-    // Check for delimiter at end of accumulated bytes
-    const len = bytes.length;
-    if (
-      len >= 3 &&
-      bytes[len - 1] === 0 &&
-      bytes[len - 2] === 0 &&
-      bytes[len - 3] === 0
-    ) {
-      // Trim the delimiter
-      const messageBytes = bytes.slice(0, len - 3);
-      const raw = Buffer.from(messageBytes).toString('utf8');
-      return password ? decrypt(raw, password) : raw;
+  for (let i = 0; i < totalChannels; i++) {
+    bitAcc = (bitAcc << 1) | (pixels[i] & 1);
+    bitCount++;
+    if (bitCount === 8) {
+      bytes.push(bitAcc);
+      bitAcc = 0;
+      bitCount = 0;
+
+      const len = bytes.length;
+      if (
+        len >= 3 &&
+        bytes[len - 1] === 0 &&
+        bytes[len - 2] === 0 &&
+        bytes[len - 3] === 0
+      ) {
+        const messageBytes = bytes.slice(0, len - 3);
+        const raw = Buffer.from(messageBytes).toString('utf8');
+        return password ? decrypt(raw, password) : raw;
+      }
     }
   }
 
