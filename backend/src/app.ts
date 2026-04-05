@@ -48,6 +48,20 @@ if (fs.existsSync(uploadsPath)) {
   app.use('/uploads', express.static(uploadsPath));
 }
 
+// Root — Vercel visitors often open the deployment URL without /api (would otherwise be "Cannot GET /")
+app.get('/', (_req, res) => {
+  res.json({
+    service: 'steganography-api',
+    health: '/api/health',
+    endpoints: {
+      auth: '/api/auth/*',
+      encode: 'POST /api/encode',
+      decode: 'POST /api/decode',
+      prompts: '/api/prompts',
+    },
+  });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api', stegoRoutes);
 app.use('/api/prompts', promptRoutes);
