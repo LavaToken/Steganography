@@ -142,7 +142,7 @@ Entry point: `api/index.ts` wraps Express with `serverless-http`; all routes sta
 
 1. **Root Directory**: `frontend`.
 2. **Environment variable**: `VITE_API_URL` = backend origin **without** `/api`, e.g. `https://<backend>.vercel.app`.
-3. Leave `VITE_API_URL` unset locally so Vite’s dev proxy still sends `/api` to `localhost:3001`.
+3. **`VITE_API_URL` is only read in production builds** (`npm run build` / Vercel). `npm run dev` always proxies `/api` to your local backend—no need to unset anything for local work.
 
 ### Why two projects?
 

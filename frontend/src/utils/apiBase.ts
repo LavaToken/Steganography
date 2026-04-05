@@ -1,12 +1,14 @@
 /**
- * Production: set VITE_API_URL to your backend origin (no trailing slash), e.g.
- * https://stego-api.vercel.app
- * Dev: leave unset — Vite proxy serves /api → localhost backend.
+ * - **Development:** always `/api` → Vite proxy → local backend (ignore VITE_API_URL).
+ * - **Production:** `VITE_API_URL` from Vercel (e.g. https://your-api.vercel.app), no trailing slash.
  */
 export function getApiBaseURL(): string {
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
   const root = import.meta.env.VITE_API_URL as string | undefined;
-  if (root && root.length > 0) {
-    return `${root.replace(/\/$/, '')}/api`;
+  if (root && root.trim().length > 0) {
+    return `${root.trim().replace(/\/$/, '')}/api`;
   }
   return '/api';
 }
