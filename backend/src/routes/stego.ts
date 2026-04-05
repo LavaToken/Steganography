@@ -1,17 +1,14 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 import { authenticate, optionalAuthenticate } from '../middleware/auth';
 import { encode, decode, analyzeImage } from '../controllers/stegoController';
+import { rawUploadDir, ensureUploadDirs } from '../config/uploadPaths';
 
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
-const RAW_DIR = path.join(UPLOADS_DIR, 'raw');
-
-if (!fs.existsSync(RAW_DIR)) fs.mkdirSync(RAW_DIR, { recursive: true });
+ensureUploadDirs();
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, RAW_DIR),
+  destination: (_req, _file, cb) => cb(null, rawUploadDir),
   filename: (_req, file, cb) => {
     const unique = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const ext = path.extname(file.originalname).toLowerCase();
@@ -29,15 +26,13 @@ const fileFilter = (
   else cb(new Error('Only JPEG, PNG, WebP, and GIF images are allowed'));
 };
 
-const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
+const maxBytes = process.env.VERCEL === '1' ? 4 * 1024 * 1024 : 10 * 1024 * 1024;
+const upload = multer({ storage, fileFilter, limits: { fileSize: maxBytes } });
 
 const router = Router();
 
-// encode and decode work for both guests and authenticated users
 router.post('/encode', optionalAuthenticate, upload.single('image'), encode);
 router.post('/decode', optionalAuthenticate, upload.single('image'), decode);
-
-// image analysis requires auth (uses paid LLM API)
 router.post('/analyze-image', authenticate, upload.single('image'), analyzeImage);
 
 export default router;

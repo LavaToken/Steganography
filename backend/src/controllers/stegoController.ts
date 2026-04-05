@@ -10,10 +10,9 @@ import {
   isCloudinaryConfigured,
 } from '../services/cloudinaryService';
 import { prisma } from '../config/database';
+import { tempEncodeDir, ensureUploadDirs } from '../config/uploadPaths';
 
-// Temp dir for in-progress encoding before upload
-const TEMP_DIR = path.join(__dirname, '../../uploads/tmp');
-if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+ensureUploadDirs();
 
 function cleanupFile(filePath: string) {
   try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* best-effort */ }
@@ -46,7 +45,7 @@ export async function encode(req: AuthRequest, res: Response, next: NextFunction
 
     // LSB encode to a temp file
     const tempFilename = `enc_${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
-    const tempOutputPath = path.join(TEMP_DIR, tempFilename);
+    const tempOutputPath = path.join(tempEncodeDir, tempFilename);
     await encodeMessage(inputPath, message, tempOutputPath, password || undefined);
 
     const outputBuffer = fs.readFileSync(tempOutputPath);

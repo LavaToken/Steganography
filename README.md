@@ -117,3 +117,33 @@ POST   /api/analyze-image    AI image analysis (requires Anthropic key)
 GET    /api/prompts          Get history
 DELETE /api/prompts/:id      Delete entry
 ```
+
+## Deploying on Vercel (backend + frontend, two projects)
+
+Use **two Vercel projects** with **Root Directory** `backend` and `frontend` respectively.
+
+### Backend (`backend/`)
+
+1. **New Project** → same Git repo → **Root Directory**: `backend`.
+2. **Environment variables** (see `backend/.env.example`):
+   - `DATABASE_URL` — hosted Postgres (Neon, Supabase, Vercel Postgres, etc.). Use a **pooling** URL if the provider recommends it for serverless.
+   - `JWT_SECRET` — strong random string.
+   - `NODE_ENV` — `production`.
+   - `CORS_ORIGIN` — your frontend URL(s), comma-separated, e.g. `https://my-app.vercel.app`. If omitted, CORS reflects the request origin (fine for quick tests).
+   - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` — **strongly recommended** (Vercel has no persistent local disk for uploads).
+   - `ANTHROPIC_API_KEY` — optional.
+3. Vercel sets `VERCEL=1`; the app writes uploads only under **`/tmp`**, and request body limit is **4 MB** on the API route.
+4. `vercel.json` sets **10s** `maxDuration` (Hobby). For large images, use **Vercel Pro** and increase `functions.api/index.ts.maxDuration` (e.g. 60).
+5. Smoke test: `https://<backend>.vercel.app/api/health`.
+
+Entry point: `api/index.ts` wraps Express with `serverless-http`; all routes stay under `/api/...`.
+
+### Frontend (`frontend/`)
+
+1. **Root Directory**: `frontend`.
+2. **Environment variable**: `VITE_API_URL` = backend origin **without** `/api`, e.g. `https://<backend>.vercel.app`.
+3. Leave `VITE_API_URL` unset locally so Vite’s dev proxy still sends `/api` to `localhost:3001`.
+
+### Why two projects?
+
+The API runs as a **serverless function**; the UI is a **static Vite build**. Splitting avoids mixing build outputs and keeps caching correct.
